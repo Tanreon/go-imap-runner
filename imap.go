@@ -19,6 +19,7 @@ import (
 var ErrInboxEmpty = errors.New("INBOX_IS_EMPTY")
 var ErrFetchBug = errors.New("FETCH_BUG")
 var ErrImapServerNotRecognized = errors.New("IMAP_SERVER_NOT_RECOGNIZED")
+var ErrInvalidCredentials = errors.New("IMAP_INVALID_CREDENTIALS")
 
 type ImapRunner struct {
 	client   *imapClient.Client
@@ -31,7 +32,15 @@ func (i *ImapRunner) Logout() {
 }
 
 func (i *ImapRunner) Login() error {
-	return i.client.Login(i.email, i.password)
+	if err := i.client.Login(i.email, i.password); err != nil {
+		if strings.EqualFold(err.Error(), "LOGIN Invalid credentials") {
+			return ErrInvalidCredentials
+		}
+
+		return fmt.Errorf("error while signing in: %w", err)
+	}
+
+	return nil
 }
 
 func (i *ImapRunner) SelectMailBox(name string, readOnly bool) (mailbox *imap.MailboxStatus, err error) {
