@@ -33,7 +33,10 @@ func (i *ImapRunner) Logout() {
 
 func (i *ImapRunner) Login() error {
 	if err := i.client.Login(i.email, i.password); err != nil {
-		if strings.EqualFold(err.Error(), "LOGIN Invalid credentials") {
+		if strings.Contains(err.Error(), "LOGIN Invalid credentials") {
+			return ErrInvalidCredentials
+		}
+		if strings.Contains(err.Error(), "Please log in via your web browser") || strings.Contains(err.Error(), "https://support.google.com/mail/accounts/answer/78754") {
 			return ErrInvalidCredentials
 		}
 
