@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"math"
 	"net/textproto"
+	"sort"
 	"strings"
 
 	"github.com/DusanKasan/parsemail"
@@ -61,7 +62,7 @@ func (i *ImapRunner) RemoveAllMessages(mailbox *imap.MailboxStatus) (err error) 
 	}
 
 	seqSet := new(imap.SeqSet)
-	seqSet.AddRange(uint32(1), mailbox.Messages)
+	seqSet.AddRange(1, mailbox.Messages)
 
 	if err := i.client.Store(seqSet, imap.FormatFlagsOp(imap.AddFlags, true), []interface{}{imap.DeletedFlag}, nil); err != nil {
 		return fmt.Errorf("set flag error: %w", err)
@@ -83,19 +84,18 @@ func (i *ImapRunner) GetMessages(mailbox *imap.MailboxStatus, maxCount uint32) (
 		return emails, ErrInboxEmpty
 	}
 
-	messagesCount := mailbox.Messages
-
-	if messagesCount > maxCount {
-		messagesCount = maxCount
+	min := int32(mailbox.Messages) + 1 - int32(maxCount)
+	if min < 1 {
+		min = 1
 	}
 
 	seqSet := imap.SeqSet{}
-	seqSet.AddRange(uint32(1), messagesCount)
+	seqSet.AddRange(uint32(min), mailbox.Messages)
 
 	section := &imap.BodySectionName{}
-	items := []imap.FetchItem{section.FetchItem()}
+	items := []imap.FetchItem{imap.FetchEnvelope, imap.FetchFlags, imap.FetchInternalDate, section.FetchItem()}
 
-	messages := make(chan *imap.Message, messagesCount)
+	messages := make(chan *imap.Message, (seqSet.Set[0].Stop-seqSet.Set[0].Start)+1)
 
 	if err := i.client.Fetch(&seqSet, items, messages); err != nil {
 		if strings.EqualFold(err.Error(), "FETCH Server error while fetching messages") {
@@ -116,8 +116,13 @@ func (i *ImapRunner) GetMessages(mailbox *imap.MailboxStatus, maxCount uint32) (
 			return emails, fmt.Errorf("mail parse error: %w", err)
 		}
 
+		email.Date = message.InternalDate // mailparser bug
 		emails = append(emails, email)
 	}
+
+	sort.Slice(emails, func(i, j int) bool {
+		return emails[i].Date.After(emails[j].Date)
+	})
 
 	return emails, err
 }
@@ -131,19 +136,18 @@ func (i *ImapRunner) GetMessagesRaw(mailbox *imap.MailboxStatus, maxCount uint32
 		return emails, ErrInboxEmpty
 	}
 
-	messagesCount := mailbox.Messages
-
-	if messagesCount > maxCount {
-		messagesCount = maxCount
+	min := int32(mailbox.Messages) + 1 - int32(maxCount)
+	if min < 1 {
+		min = 1
 	}
 
 	seqSet := imap.SeqSet{}
-	seqSet.AddRange(uint32(1), messagesCount)
+	seqSet.AddRange(uint32(min), mailbox.Messages)
 
 	section := &imap.BodySectionName{}
-	items := []imap.FetchItem{section.FetchItem()}
+	items := []imap.FetchItem{imap.FetchEnvelope, imap.FetchFlags, imap.FetchInternalDate, section.FetchItem()}
 
-	messages := make(chan *imap.Message, messagesCount)
+	messages := make(chan *imap.Message, (seqSet.Set[0].Stop-seqSet.Set[0].Start)+1)
 
 	if err := i.client.Fetch(&seqSet, items, messages); err != nil {
 		if strings.EqualFold(err.Error(), "FETCH Server error while fetching messages") {
@@ -190,7 +194,7 @@ func (i *ImapRunner) SearchSubject(phrase string, unseenOnly bool) (emails []par
 		seqSet.AddNum(foundIds...)
 
 		section := &imap.BodySectionName{}
-		items := []imap.FetchItem{section.FetchItem()}
+		items := []imap.FetchItem{imap.FetchEnvelope, imap.FetchFlags, imap.FetchInternalDate, section.FetchItem()}
 
 		messages := make(chan *imap.Message, 10)
 
@@ -213,9 +217,14 @@ func (i *ImapRunner) SearchSubject(phrase string, unseenOnly bool) (emails []par
 				return emails, fmt.Errorf("mail parse error: %w", err)
 			}
 
+			email.Date = message.InternalDate // mailparser bug
 			emails = append(emails, email)
 		}
 	}
+
+	sort.Slice(emails, func(i, j int) bool {
+		return emails[i].Date.After(emails[j].Date)
+	})
 
 	return emails, err
 }
@@ -240,7 +249,7 @@ func (i *ImapRunner) SearchFrom(from string, unseenOnly bool) (emails []parsemai
 		seqSet.AddNum(foundIds...)
 
 		section := &imap.BodySectionName{}
-		items := []imap.FetchItem{section.FetchItem()}
+		items := []imap.FetchItem{imap.FetchEnvelope, imap.FetchFlags, imap.FetchInternalDate, section.FetchItem()}
 
 		messages := make(chan *imap.Message, len(foundIds))
 
@@ -263,9 +272,14 @@ func (i *ImapRunner) SearchFrom(from string, unseenOnly bool) (emails []parsemai
 				return emails, fmt.Errorf("mail parse error: %w", err)
 			}
 
+			email.Date = message.InternalDate // mailparser bug
 			emails = append(emails, email)
 		}
 	}
+
+	sort.Slice(emails, func(i, j int) bool {
+		return emails[i].Date.After(emails[j].Date)
+	})
 
 	return emails, err
 }
