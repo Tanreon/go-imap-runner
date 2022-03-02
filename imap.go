@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"net/textproto"
 	"strings"
 
@@ -55,34 +56,46 @@ func (i *ImapRunner) SelectInbox(readOnly bool) (mailbox *imap.MailboxStatus, er
 }
 
 func (i *ImapRunner) RemoveAllMessages(mailbox *imap.MailboxStatus) (err error) {
-	if mailbox.Messages > 0 {
-		seqSet := new(imap.SeqSet)
-		seqSet.AddRange(uint32(1), mailbox.Messages)
-
-		if err := i.client.Store(seqSet, imap.FormatFlagsOp(imap.AddFlags, true), []interface{}{imap.DeletedFlag}, nil); err != nil {
-			return fmt.Errorf("set flag error: %w", err)
-		}
-
-		if err = i.client.Expunge(nil); err != nil {
-			return fmt.Errorf("expunge error: %w", err)
-		}
+	if mailbox.Messages <= 0 {
+		return err
 	}
 
-	return nil
+	seqSet := new(imap.SeqSet)
+	seqSet.AddRange(uint32(1), mailbox.Messages)
+
+	if err := i.client.Store(seqSet, imap.FormatFlagsOp(imap.AddFlags, true), []interface{}{imap.DeletedFlag}, nil); err != nil {
+		return fmt.Errorf("set flag error: %w", err)
+	}
+
+	if err = i.client.Expunge(nil); err != nil {
+		return fmt.Errorf("expunge error: %w", err)
+	}
+
+	return err
 }
 
 func (i *ImapRunner) GetAllMessages(mailbox *imap.MailboxStatus) (emails []parsemail.Email, err error) {
+	return i.GetMessages(mailbox, math.MaxUint32)
+}
+
+func (i *ImapRunner) GetMessages(mailbox *imap.MailboxStatus, maxCount uint32) (emails []parsemail.Email, err error) {
 	if mailbox.Messages <= 0 {
 		return emails, ErrInboxEmpty
 	}
 
+	messagesCount := mailbox.Messages
+
+	if messagesCount > maxCount {
+		messagesCount = maxCount
+	}
+
 	seqSet := imap.SeqSet{}
-	seqSet.AddRange(uint32(1), mailbox.Messages)
+	seqSet.AddRange(uint32(1), messagesCount)
 
 	section := &imap.BodySectionName{}
 	items := []imap.FetchItem{section.FetchItem()}
 
-	messages := make(chan *imap.Message, mailbox.Messages)
+	messages := make(chan *imap.Message, messagesCount)
 
 	if err := i.client.Fetch(&seqSet, items, messages); err != nil {
 		if strings.EqualFold(err.Error(), "FETCH Server error while fetching messages") {
@@ -110,17 +123,27 @@ func (i *ImapRunner) GetAllMessages(mailbox *imap.MailboxStatus) (emails []parse
 }
 
 func (i *ImapRunner) GetAllMessagesRaw(mailbox *imap.MailboxStatus) (emails [][]byte, err error) {
+	return i.GetMessagesRaw(mailbox, math.MaxUint32)
+}
+
+func (i *ImapRunner) GetMessagesRaw(mailbox *imap.MailboxStatus, maxCount uint32) (emails [][]byte, err error) {
 	if mailbox.Messages <= 0 {
 		return emails, ErrInboxEmpty
 	}
 
+	messagesCount := mailbox.Messages
+
+	if messagesCount > maxCount {
+		messagesCount = maxCount
+	}
+
 	seqSet := imap.SeqSet{}
-	seqSet.AddRange(uint32(1), mailbox.Messages)
+	seqSet.AddRange(uint32(1), messagesCount)
 
 	section := &imap.BodySectionName{}
 	items := []imap.FetchItem{section.FetchItem()}
 
-	messages := make(chan *imap.Message, mailbox.Messages)
+	messages := make(chan *imap.Message, messagesCount)
 
 	if err := i.client.Fetch(&seqSet, items, messages); err != nil {
 		if strings.EqualFold(err.Error(), "FETCH Server error while fetching messages") {
