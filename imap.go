@@ -76,7 +76,7 @@ func (i *ImapRunner) RemoveAllMessages(mailbox *imap.MailboxStatus) (err error) 
 }
 
 func (i *ImapRunner) GetAllMessages(mailbox *imap.MailboxStatus) (emails []parsemail.Email, err error) {
-	return i.GetMessages(mailbox, math.MaxUint32)
+	return i.GetMessages(mailbox, math.MaxInt32)
 }
 
 func (i *ImapRunner) GetMessages(mailbox *imap.MailboxStatus, maxCount uint32) (emails []parsemail.Email, err error) {
@@ -128,7 +128,7 @@ func (i *ImapRunner) GetMessages(mailbox *imap.MailboxStatus, maxCount uint32) (
 }
 
 func (i *ImapRunner) GetAllMessagesRaw(mailbox *imap.MailboxStatus) (emails [][]byte, err error) {
-	return i.GetMessagesRaw(mailbox, math.MaxUint32)
+	return i.GetMessagesRaw(mailbox, math.MaxInt32)
 }
 
 func (i *ImapRunner) GetMessagesRaw(mailbox *imap.MailboxStatus, maxCount uint32) (emails [][]byte, err error) {
