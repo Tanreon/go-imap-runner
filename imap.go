@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/textproto"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/DusanKasan/parsemail"
@@ -75,6 +76,46 @@ func (i *ImapRunner) RemoveAllMessages(mailbox *imap.MailboxStatus) (err error) 
 	return err
 }
 
+func (i *ImapRunner) RemoveMessage(mailbox *imap.MailboxStatus) (err error) {
+	if mailbox.Messages <= 0 {
+		return err
+	}
+
+	seqSet := new(imap.SeqSet)
+	seqSet.AddRange(1, mailbox.Messages)
+
+	if err := i.client.Store(seqSet, imap.FormatFlagsOp(imap.AddFlags, true), []interface{}{imap.DeletedFlag}, nil); err != nil {
+		return fmt.Errorf("set flag error: %w", err)
+	}
+
+	if err = i.client.Expunge(nil); err != nil {
+		return fmt.Errorf("expunge error: %w", err)
+	}
+
+	return err
+}
+
+func (i *ImapRunner) RemoveMessages(mailbox *imap.MailboxStatus, messageUids []string) (err error) {
+	if mailbox.Messages <= 0 {
+		return err
+	}
+
+	seqSet := new(imap.SeqSet)
+	for _, uid := range messageUids {
+		seqSet.Add(uid)
+	}
+
+	if err := i.client.UidStore(seqSet, imap.FormatFlagsOp(imap.AddFlags, true), []interface{}{imap.DeletedFlag}, nil); err != nil {
+		return fmt.Errorf("set flag error: %w", err)
+	}
+
+	if err = i.client.Expunge(nil); err != nil {
+		return fmt.Errorf("expunge error: %w", err)
+	}
+
+	return err
+}
+
 func (i *ImapRunner) GetAllMessages(mailbox *imap.MailboxStatus) (emails []parsemail.Email, err error) {
 	return i.GetMessages(mailbox, math.MaxInt32)
 }
@@ -93,7 +134,7 @@ func (i *ImapRunner) GetMessages(mailbox *imap.MailboxStatus, maxCount uint32) (
 	seqSet.AddRange(uint32(min), mailbox.Messages)
 
 	section := &imap.BodySectionName{}
-	items := []imap.FetchItem{imap.FetchEnvelope, imap.FetchFlags, imap.FetchInternalDate, section.FetchItem()}
+	items := append(imap.FetchAll.Expand(), imap.FetchUid, section.FetchItem())
 
 	messages := make(chan *imap.Message, (seqSet.Set[0].Stop-seqSet.Set[0].Start)+1)
 
@@ -116,7 +157,8 @@ func (i *ImapRunner) GetMessages(mailbox *imap.MailboxStatus, maxCount uint32) (
 			return emails, fmt.Errorf("mail parse error: %w", err)
 		}
 
-		email.Date = message.InternalDate // mailparser bug
+		email.MessageID = strconv.Itoa(int(message.Uid)) // not in RFC, костыль по русски говоря
+		email.Date = message.InternalDate                // mailparser bug
 		emails = append(emails, email)
 	}
 
@@ -145,7 +187,7 @@ func (i *ImapRunner) GetMessagesRaw(mailbox *imap.MailboxStatus, maxCount uint32
 	seqSet.AddRange(uint32(min), mailbox.Messages)
 
 	section := &imap.BodySectionName{}
-	items := []imap.FetchItem{imap.FetchEnvelope, imap.FetchFlags, imap.FetchInternalDate, section.FetchItem()}
+	items := append(imap.FetchAll.Expand(), imap.FetchUid, section.FetchItem())
 
 	messages := make(chan *imap.Message, (seqSet.Set[0].Stop-seqSet.Set[0].Start)+1)
 
@@ -194,7 +236,7 @@ func (i *ImapRunner) SearchSubject(phrase string, unseenOnly bool) (emails []par
 		seqSet.AddNum(foundIds...)
 
 		section := &imap.BodySectionName{}
-		items := []imap.FetchItem{imap.FetchEnvelope, imap.FetchFlags, imap.FetchInternalDate, section.FetchItem()}
+		items := append(imap.FetchAll.Expand(), imap.FetchUid, section.FetchItem())
 
 		messages := make(chan *imap.Message, 10)
 
@@ -217,7 +259,8 @@ func (i *ImapRunner) SearchSubject(phrase string, unseenOnly bool) (emails []par
 				return emails, fmt.Errorf("mail parse error: %w", err)
 			}
 
-			email.Date = message.InternalDate // mailparser bug
+			email.MessageID = strconv.Itoa(int(message.Uid)) // not in RFC, костыль по русски говоря
+			email.Date = message.InternalDate                // mailparser bug
 			emails = append(emails, email)
 		}
 	}
@@ -249,7 +292,7 @@ func (i *ImapRunner) SearchFrom(from string, unseenOnly bool) (emails []parsemai
 		seqSet.AddNum(foundIds...)
 
 		section := &imap.BodySectionName{}
-		items := []imap.FetchItem{imap.FetchEnvelope, imap.FetchFlags, imap.FetchInternalDate, section.FetchItem()}
+		items := append(imap.FetchAll.Expand(), imap.FetchUid, section.FetchItem())
 
 		messages := make(chan *imap.Message, len(foundIds))
 
@@ -272,7 +315,8 @@ func (i *ImapRunner) SearchFrom(from string, unseenOnly bool) (emails []parsemai
 				return emails, fmt.Errorf("mail parse error: %w", err)
 			}
 
-			email.Date = message.InternalDate // mailparser bug
+			email.MessageID = strconv.Itoa(int(message.Uid)) // not in RFC, костыль по русски говоря
+			email.Date = message.InternalDate                // mailparser bug
 			emails = append(emails, email)
 		}
 	}
@@ -282,6 +326,21 @@ func (i *ImapRunner) SearchFrom(from string, unseenOnly bool) (emails []parsemai
 	})
 
 	return emails, err
+}
+
+func (i *ImapRunner) MoveMessages(mailboxFrom *imap.MailboxStatus, mailboxTo string, messageUids []uint32) (err error) {
+	if mailboxFrom.Messages <= 0 {
+		return err
+	}
+
+	seqSet := new(imap.SeqSet)
+	seqSet.AddNum(messageUids...)
+
+	if err := i.client.UidMove(seqSet, mailboxTo); err != nil {
+		return fmt.Errorf("mail move error: %w", err)
+	}
+
+	return err
 }
 
 func NewImapRunner(dialer *rule.Proxy, email, password string) (*ImapRunner, error) {
