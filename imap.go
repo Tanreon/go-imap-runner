@@ -39,6 +39,9 @@ func (i *ImapRunner) Login() error {
 		if strings.Contains(err.Error(), "LOGIN Invalid credentials") {
 			return ErrInvalidCredentials
 		}
+		if strings.Contains(err.Error(), "LOGIN failed") {
+			return ErrInvalidCredentials
+		}
 		if strings.Contains(err.Error(), "Account is blocked") || strings.Contains(err.Error(), "Login to your account via a web browser to verify your identity") {
 			return ErrInvalidCredentials
 		}
