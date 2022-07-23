@@ -440,6 +440,10 @@ func NewImapRunner(dialer *rule.Proxy, email, password string) (*ImapRunner, err
 
 	client, err := imapClient.DialWithDialerTLS(dialer.NextDialer(server), server, &tlsConfig)
 	if err != nil {
+		if isConnectionError(err) {
+			return nil, &net.OpError{Op: "read", Err: err}
+		}
+
 		return nil, err
 	}
 
@@ -457,6 +461,10 @@ func NewImapRunner(dialer *rule.Proxy, email, password string) (*ImapRunner, err
 		//[id.FieldEnvironment] = "",
 	})
 	if err != nil {
+		if isConnectionError(err) {
+			return nil, &net.OpError{Op: "read", Err: err}
+		}
+
 		return nil, err
 	}
 

@@ -5,5 +5,13 @@ import (
 )
 
 func isConnectionError(err error) bool {
-	return strings.Contains(err.Error(), "imap: connection closed")
+	if strings.Contains(err.Error(), "User is authenticated but not connected") {
+		return true
+	}
+
+	if strings.Contains(err.Error(), "imap: connection closed") {
+		return true
+	}
+
+	return false
 }
