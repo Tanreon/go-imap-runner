@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
+	"net"
 	"net/textproto"
 	"sort"
 	"strconv"
@@ -48,6 +49,9 @@ func (i *ImapRunner) Login() error {
 		if strings.Contains(err.Error(), "Please log in via your web browser") || strings.Contains(err.Error(), "https://support.google.com/mail/accounts/answer/78754") {
 			return ErrInvalidCredentials
 		}
+		if isConnectionError(err) {
+			return &net.OpError{Op: "read", Err: err}
+		}
 
 		return fmt.Errorf("error while signing in: %w", err)
 	}
@@ -56,7 +60,12 @@ func (i *ImapRunner) Login() error {
 }
 
 func (i *ImapRunner) SelectMailBox(name string, readOnly bool) (mailbox *imap.MailboxStatus, err error) {
-	return i.client.Select(name, readOnly)
+	mailbox, err = i.client.Select(name, readOnly)
+	if err != nil && isConnectionError(err) {
+		return mailbox, &net.OpError{Op: "read", Err: err}
+	}
+
+	return mailbox, err
 }
 
 func (i *ImapRunner) SelectInbox(readOnly bool) (mailbox *imap.MailboxStatus, err error) {
@@ -72,10 +81,18 @@ func (i *ImapRunner) RemoveAllMessages(mailbox *imap.MailboxStatus) (err error) 
 	seqSet.AddRange(1, mailbox.Messages)
 
 	if err := i.client.Store(seqSet, imap.FormatFlagsOp(imap.AddFlags, true), []interface{}{imap.DeletedFlag}, nil); err != nil {
+		if isConnectionError(err) {
+			return &net.OpError{Op: "read", Err: err}
+		}
+
 		return fmt.Errorf("set flag error: %w", err)
 	}
 
 	if err = i.client.Expunge(nil); err != nil {
+		if isConnectionError(err) {
+			return &net.OpError{Op: "read", Err: err}
+		}
+
 		return fmt.Errorf("expunge error: %w", err)
 	}
 
@@ -91,10 +108,18 @@ func (i *ImapRunner) RemoveMessage(mailbox *imap.MailboxStatus) (err error) {
 	seqSet.AddRange(1, mailbox.Messages)
 
 	if err := i.client.Store(seqSet, imap.FormatFlagsOp(imap.AddFlags, true), []interface{}{imap.DeletedFlag}, nil); err != nil {
+		if isConnectionError(err) {
+			return &net.OpError{Op: "read", Err: err}
+		}
+
 		return fmt.Errorf("set flag error: %w", err)
 	}
 
 	if err = i.client.Expunge(nil); err != nil {
+		if isConnectionError(err) {
+			return &net.OpError{Op: "read", Err: err}
+		}
+
 		return fmt.Errorf("expunge error: %w", err)
 	}
 
@@ -112,10 +137,18 @@ func (i *ImapRunner) RemoveMessages(mailbox *imap.MailboxStatus, messageUids []s
 	}
 
 	if err := i.client.UidStore(seqSet, imap.FormatFlagsOp(imap.AddFlags, true), []interface{}{imap.DeletedFlag}, nil); err != nil {
+		if isConnectionError(err) {
+			return &net.OpError{Op: "read", Err: err}
+		}
+
 		return fmt.Errorf("set flag error: %w", err)
 	}
 
 	if err = i.client.Expunge(nil); err != nil {
+		if isConnectionError(err) {
+			return &net.OpError{Op: "read", Err: err}
+		}
+
 		return fmt.Errorf("expunge error: %w", err)
 	}
 
@@ -147,6 +180,10 @@ func (i *ImapRunner) GetMessages(mailbox *imap.MailboxStatus, maxCount uint32) (
 	if err := i.client.Fetch(&seqSet, items, messages); err != nil {
 		if strings.EqualFold(err.Error(), "FETCH Server error while fetching messages") {
 			return emails, ErrFetchBug
+		}
+
+		if isConnectionError(err) {
+			return emails, &net.OpError{Op: "read", Err: err}
 		}
 
 		return emails, fmt.Errorf("fetching found messages error: %w", err)
@@ -202,6 +239,10 @@ func (i *ImapRunner) GetMessagesRaw(mailbox *imap.MailboxStatus, maxCount uint32
 			return emails, ErrFetchBug
 		}
 
+		if isConnectionError(err) {
+			return emails, &net.OpError{Op: "read", Err: err}
+		}
+
 		return emails, fmt.Errorf("fetching found messages error: %w", err)
 	}
 
@@ -232,6 +273,10 @@ func (i *ImapRunner) SearchSubject(phrase string, unseenOnly bool) (emails []par
 
 	foundIds, err := i.client.Search(searchCriteria)
 	if err != nil {
+		if isConnectionError(err) {
+			return emails, &net.OpError{Op: "read", Err: err}
+		}
+
 		return emails, fmt.Errorf("search with search criteria error: %w", err)
 	}
 
@@ -249,6 +294,10 @@ func (i *ImapRunner) SearchSubject(phrase string, unseenOnly bool) (emails []par
 		if err := i.client.Fetch(&seqSet, items, messages); err != nil {
 			if strings.EqualFold(err.Error(), "FETCH Server error while fetching messages") {
 				return emails, ErrFetchBug
+			}
+
+			if isConnectionError(err) {
+				return emails, &net.OpError{Op: "read", Err: err}
 			}
 
 			return emails, fmt.Errorf("fetching found messages error: %w", err)
@@ -288,6 +337,10 @@ func (i *ImapRunner) SearchFrom(from string, unseenOnly bool) (emails []parsemai
 
 	foundIds, err := i.client.Search(searchCriteria)
 	if err != nil {
+		if isConnectionError(err) {
+			return emails, &net.OpError{Op: "read", Err: err}
+		}
+
 		return emails, fmt.Errorf("search with search criteria error: %w", err)
 	}
 
@@ -305,6 +358,10 @@ func (i *ImapRunner) SearchFrom(from string, unseenOnly bool) (emails []parsemai
 		if err := i.client.Fetch(&seqSet, items, messages); err != nil {
 			if strings.EqualFold(err.Error(), "FETCH Server error while fetching messages") {
 				return emails, ErrFetchBug
+			}
+
+			if isConnectionError(err) {
+				return emails, &net.OpError{Op: "read", Err: err}
 			}
 
 			return emails, fmt.Errorf("fetching found messages error: %w", err)
@@ -343,6 +400,10 @@ func (i *ImapRunner) MoveMessages(mailboxFrom *imap.MailboxStatus, mailboxTo str
 	seqSet.AddNum(messageUids...)
 
 	if err := i.client.UidMove(seqSet, mailboxTo); err != nil {
+		if isConnectionError(err) {
+			return &net.OpError{Op: "read", Err: err}
+		}
+
 		return fmt.Errorf("mail move error: %w", err)
 	}
 
