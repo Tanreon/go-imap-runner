@@ -9,6 +9,10 @@ func isConnectionError(err error) bool {
 		return true
 	}
 
+	if strings.Contains(err.Error(), "Server Unavailable") {
+		return true
+	}
+
 	if strings.Contains(err.Error(), "imap: connection closed") {
 		return true
 	}
