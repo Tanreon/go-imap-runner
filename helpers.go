@@ -17,6 +17,10 @@ func isConnectionError(err error) bool {
 		return true
 	}
 
+	if strings.Contains(err.Error(), "Please try again later") {
+		return true
+	}
+
 	if strings.Contains(err.Error(), "imap: connection closed") {
 		return true
 	}
