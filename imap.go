@@ -432,7 +432,7 @@ func NewImapRunner(dialer *rule.Proxy, email, password string) (*ImapRunner, err
 
 	_, err = id.NewClient(client).ID(map[string]string{
 		id.FieldName:    "Thunderbird",
-		id.FieldVersion: "91.6.0",
+		id.FieldVersion: "102.2.1",
 		//[id.FieldOS] = "",
 		//[id.FieldOSVersion] = "",
 		//[id.FieldVendor] = "",
