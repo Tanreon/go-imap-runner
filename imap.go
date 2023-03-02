@@ -411,26 +411,9 @@ func (i *ImapRunner) MoveMessages(mailboxFrom *imap.MailboxStatus, mailboxTo str
 }
 
 func NewImapRunner(dialer *rule.Proxy, email, password string) (*ImapRunner, error) {
-	var server string
-
-	atPosition := strings.LastIndex(email, "@")
-	if atPosition >= 0 {
-		switch email[atPosition+1:] {
-		case "yahoo.com":
-			server = "imap.mail.yahoo.com:993"
-		case "outlook.com":
-			server = "outlook.office365.com:993"
-		case "gmail.com":
-			server = "imap.gmail.com:993"
-		default:
-			return nil, ErrImapServerNotRecognized
-			//log.Printf("[%s] [%s] skip reason: unknown server", LOG_HEAD, imapData.login)
-			//return
-		}
-	} else {
-		return nil, ErrImapServerNotRecognized
-		//log.Printf("[%s] [%s] skip reason: unknown server", LOG_HEAD, imapData.login)
-		//return
+	server, err := parseServer(email)
+	if err != nil {
+		return nil, fmt.Errorf("imap server recognize error: %w", err)
 	}
 
 	tlsConfig := tls.Config{
