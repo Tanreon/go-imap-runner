@@ -5,6 +5,10 @@ import (
 )
 
 func isConnectionError(err error) bool {
+	if strings.EqualFold(err.Error(), "EOF") {
+		return true
+	}
+
 	if strings.Contains(err.Error(), "User is authenticated but not connected") {
 		return true
 	}
