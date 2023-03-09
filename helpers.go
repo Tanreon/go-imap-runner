@@ -1,11 +1,12 @@
 package imap_runner
 
 import (
+	"errors"
 	"strings"
 )
 
 func isConnectionError(err error) bool {
-	if strings.EqualFold(err.Error(), "EOF") {
+	if strings.EqualFold(err.Error(), "EOF") || strings.EqualFold(errors.Unwrap(err).Error(), "EOF") {
 		return true
 	}
 
