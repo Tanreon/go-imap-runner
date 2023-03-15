@@ -6,7 +6,12 @@ import (
 )
 
 func isConnectionError(err error) bool {
-	if strings.EqualFold(err.Error(), "EOF") || strings.EqualFold(errors.Unwrap(err).Error(), "EOF") {
+	if strings.EqualFold(err.Error(), "EOF") {
+		return true
+	}
+
+	wrappedErr := errors.Unwrap(err)
+	if wrappedErr != nil && strings.EqualFold(wrappedErr.Error(), "EOF") {
 		return true
 	}
 
